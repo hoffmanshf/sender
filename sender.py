@@ -11,10 +11,10 @@ SEQ_NUM_MODULO = 32
 class sender:
     seqOut = None
 
-    packets = {}
+    sendPackets = {}
     base = 0
-    nextSeqNum = 0
     seqNum = 0
+    nextSeqNum = 0
 
     sendSocket = None
     timer = None
@@ -50,7 +50,7 @@ class sender:
 
     # helper to send data packet with seqnum i
     def send_packet(self, i):
-        data = self.packets[i].get_udp_data()
+        data = self.sendPackets[i].get_udp_data()
         self.sendSocket.sendto(data, (self.emulatorAddress, self.emulatorPort))
         self.seqOut.write(str(i) + "\n")
 
@@ -76,7 +76,7 @@ class sender:
             p = packet.create_packet(self.nextSeqNum, content)
             self.sendSocket.sendto(p.get_udp_data(), (self.emulatorAddress, self.emulatorPort))
             self.seqOut.write(str(self.nextSeqNum) + "\n")
-            self.packets[self.nextSeqNum] = p
+            self.sendPackets[self.nextSeqNum] = p
 
             # start timer when there's no unacked packet
             if self.nextSeqNum == self.base:
