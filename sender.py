@@ -11,76 +11,82 @@ global sendSocket, seqOut, ackOut
 
 
 class sender:
-    sendPackets = {}
-    base = 0
-    seqNum = 0
-    nextSeqNum = 0
+    send_packets = {}
+    send_base = 0
+    seq_num = 0
+    next_seq_num = 0
     timer = None
 
-    def __init__(self, emulatorAddress, emulatorPort, senderPort, inputFileName):
-        self.emulatorAddress = emulatorAddress
-        self.emulatorPort = emulatorPort
-        self.senderPort = senderPort
-        self.inputFileName = inputFileName
+    send_complete = False
+    receive_complete = False
 
-    def send_packets(self):
-        file = open(self.inputFileName)
+    def __init__(self, emulator_address, emulator_port, sender_port, input_file_name):
+        self.emulator_address = emulator_address
+        self.emulator_port = emulator_port
+        self.sender_port = sender_port
+        self.input_file_name = input_file_name
 
-        while True:
+    def send_thread(self):
+        file = open(self.input_file_name)
+
+        while not self.receive_complete:
             content = file.read(MAX_DATA_LENGTH)
 
             if content == '':
+                self.send_complete = True
                 break
 
-            p = packet.create_packet(self.nextSeqNum, content)
-            self.sendPackets[self.nextSeqNum] = p
+            p = packet.create_packet(self.next_seq_num, content)
+            self.send_packets[self.next_seq_num] = p
 
             cv.acquire()
 
             while self.wait():
                 cv.wait()
 
-            sendSocket.sendto(p.get_udp_data(), (self.emulatorAddress, self.emulatorPort))
+            sendSocket.sendto(p.get_udp_data(), (self.emulator_address, self.emulator_port))
             seqOut.write("%d\n" % p.seq_num)
 
-            if self.nextSeqNum == self.base:
+            if self.next_seq_num == self.send_base:
                 self.setTimer()
 
-            self.nextSeqNum += 1
-            self.nextSeqNum %= SEQ_NUM_MODULO
+            self.next_seq_num += 1
+            self.next_seq_num %= SEQ_NUM_MODULO
 
             cv.release()
 
         file.close()
 
     def wait(self):
-        windowEnd = self.base + MAX_WINDOW_SIZE
+        window_end = self.send_base + MAX_WINDOW_SIZE
 
-        if windowEnd < SEQ_NUM_MODULO:
-            if self.nextSeqNum < self.base or self.nextSeqNum >= windowEnd:
+        if window_end < SEQ_NUM_MODULO:
+            if self.next_seq_num < self.send_base or self.next_seq_num >= window_end:
                 return True
-        elif windowEnd % SEQ_NUM_MODULO <= self.nextSeqNum < self.base:
+        elif window_end % SEQ_NUM_MODULO <= self.next_seq_num < self.send_base:
             return True
         else:
             return False
 
-    def receive_ack(self):
+    def receive_thread(self):
         while True:
-            data, addr = sendSocket.recvfrom(512)
-            receivePacket = packet.parse_udp_data(data)
-            if receivePacket.type != 2:
-                ackOut.write("%d\n" % receivePacket.seq_num)
+            data, _ = sendSocket.recvfrom(512)
+            receive_packet = packet.parse_udp_data(data)
+            if receive_packet.type != 2:
+                ackOut.write("%d\n" % receive_packet.seq_num)
             else:
+                self.receive_complete = True
                 break
 
             cv.acquire()
 
-            self.base = (receivePacket.seq_num + 1) % SEQ_NUM_MODULO
+            self.send_base = (receive_packet.seq_num + 1) % SEQ_NUM_MODULO
 
-            if self.nextSeqNum == self.base:
+            if self.next_seq_num == self.send_base:
                 self.timer.cancel()
-                eot = packet.create_eot(self.base)
-                sendSocket.sendto(eot.get_udp_data(), (self.emulatorAddress, self.emulatorPort))
+                if self.send_complete:
+                    eot = packet.create_eot(self.send_base)
+                    sendSocket.sendto(eot.get_udp_data(), (self.emulator_address, self.emulator_port))
             else:
                 self.setTimer()
 
@@ -96,20 +102,20 @@ class sender:
         self.setTimer()
         resendPackets = {}
         idx = 0
-        if self.nextSeqNum > self.base:
-            for i in range(self.base, self.nextSeqNum):
-                resendPackets[idx] = self.sendPackets[i]
+        if self.next_seq_num > self.send_base:
+            for i in range(self.send_base, self.next_seq_num):
+                resendPackets[idx] = self.send_packets[i]
                 idx += 1
         else:
-            for i in range(0, self.nextSeqNum):
-                resendPackets[idx] = self.sendPackets[i]
+            for i in range(0, self.next_seq_num):
+                resendPackets[idx] = self.send_packets[i]
                 idx += 1
-            for i in range(self.base, SEQ_NUM_MODULO):
-                resendPackets[idx] = self.sendPackets[i]
+            for i in range(self.send_base, SEQ_NUM_MODULO):
+                resendPackets[idx] = self.send_packets[i]
                 idx += 1
 
         for p in resendPackets.values():
-            sendSocket.sendto(p.get_udp_data(), (self.emulatorAddress, self.emulatorPort))
+            sendSocket.sendto(p.get_udp_data(), (self.emulator_address, self.emulator_port))
             seqOut.write("%d\n" % p.seq_num)
 
         cv.release()
@@ -131,24 +137,24 @@ if __name__ == "__main__":
         sys.exit(1)
 
     # parse input from arguments
-    emulatorAddress = sys.argv[1]
-    emulatorPort = int(sys.argv[2])
-    senderPort = int(sys.argv[3])
-    inputFileName = sys.argv[4]
+    emulator_address = sys.argv[1]
+    emulator_port = int(sys.argv[2])
+    sender_port = int(sys.argv[3])
+    input_file_name = sys.argv[4]
 
     sendSocket = socket(AF_INET, SOCK_DGRAM)
-    sendSocket.bind(('', senderPort))
+    sendSocket.bind(('', sender_port))
 
     seqOut = open("seqnum.log", "w")
     ackOut = open("ack.log", "w")
 
-    sender = sender(emulatorAddress, emulatorPort, senderPort, inputFileName)
+    sender = sender(emulator_address, emulator_port, sender_port, input_file_name)
 
     lock = Lock()
     cv = Condition(lock=lock)
 
-    thread1 = Thread(target=sender.send_packets)
-    thread2 = Thread(target=sender.receive_ack)
+    thread1 = Thread(target=sender.send_thread)
+    thread2 = Thread(target=sender.receive_thread)
 
     thread1.start()
     thread2.start()
