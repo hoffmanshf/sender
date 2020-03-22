@@ -26,6 +26,12 @@ class sender:
         self.sender_port = sender_port
         self.input_file_name = input_file_name
 
+    def seq_range(self, start, end):
+        res = []
+        for i in range(start, end):
+            res.append(i)
+        return res
+
     def send_thread(self):
         file = open(self.input_file_name)
 
@@ -48,7 +54,7 @@ class sender:
             seqOut.write("%d\n" % p.seq_num)
 
             if self.next_seq_num == self.send_base:
-                self.setTimer()
+                self.timer_start()
 
             self.next_seq_num += 1
             self.next_seq_num %= SEQ_NUM_MODULO
@@ -63,7 +69,7 @@ class sender:
         if window_end < SEQ_NUM_MODULO:
             if self.next_seq_num < self.send_base or self.next_seq_num >= window_end:
                 return True
-        elif window_end % SEQ_NUM_MODULO <= self.next_seq_num < self.send_base:
+        elif (window_end % SEQ_NUM_MODULO <= self.next_seq_num) and (self.next_seq_num < self.send_base):
             return True
         else:
             return False
@@ -85,10 +91,10 @@ class sender:
             if self.next_seq_num == self.send_base:
                 self.timer.cancel()
                 if self.send_complete:
-                    eot = packet.create_eot(self.send_base)
+                    eot = packet.create_eot(self.next_seq_num)
                     sendSocket.sendto(eot.get_udp_data(), (self.emulator_address, self.emulator_port))
             else:
-                self.setTimer()
+                self.timer_start()
 
             cv.notify()
             cv.release()
@@ -99,28 +105,22 @@ class sender:
 
     def resend(self):
         cv.acquire()
-        self.setTimer()
-        resendPackets = {}
-        idx = 0
-        if self.next_seq_num > self.send_base:
-            for i in range(self.send_base, self.next_seq_num):
-                resendPackets[idx] = self.send_packets[i]
-                idx += 1
-        else:
-            for i in range(0, self.next_seq_num):
-                resendPackets[idx] = self.send_packets[i]
-                idx += 1
-            for i in range(self.send_base, SEQ_NUM_MODULO):
-                resendPackets[idx] = self.send_packets[i]
-                idx += 1
+        self.timer_start()
 
-        for p in resendPackets.values():
+        if self.next_seq_num <= self.send_base:
+            send_seq = self.seq_range(0, self.next_seq_num) + self.seq_range(self.send_base, SEQ_NUM_MODULO)
+        else:
+            send_seq = self.seq_range(self.send_base, self.next_seq_num)
+
+        for i in send_seq:
+
+            p = self.send_packets[i]
             sendSocket.sendto(p.get_udp_data(), (self.emulator_address, self.emulator_port))
             seqOut.write("%d\n" % p.seq_num)
 
         cv.release()
 
-    def setTimer(self):
+    def timer_start(self):
         if self.timer is not None:
             self.timer.cancel()
         self.timer = Timer(0.1, self.resend)
