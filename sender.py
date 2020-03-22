@@ -26,11 +26,9 @@ class sender:
         self.emulatorPort = emulatorPort
         self.senderPort = senderPort
         self.inputFileName = inputFileName
-        # initiate udp socket
+
         self.sendSocket = socket(AF_INET, SOCK_DGRAM)
         self.sendSocket.bind(('', self.senderPort))
-
-        # open log files
         self.seqOut = open("seqnum.log", "w")
 
     # resend sent but not acked packets
@@ -67,35 +65,38 @@ class sender:
                 self.end = True
                 break
 
+            p = packet.create_packet(self.nextSeqNum, content)
+            self.sendPackets[self.nextSeqNum] = p
+
             cv.acquire()
 
             while self.wait():
                 cv.wait()
 
             # send packets
-            p = packet.create_packet(self.nextSeqNum, content)
             self.sendSocket.sendto(p.get_udp_data(), (self.emulatorAddress, self.emulatorPort))
-            self.seqOut.write(str(self.nextSeqNum) + "\n")
-            self.sendPackets[self.nextSeqNum] = p
+            self.seqOut.write(str(p.seq_num) + "\n")
 
             # start timer when there's no unacked packet
             if self.nextSeqNum == self.base:
                 self.setTimer()
+
             self.nextSeqNum += 1
             self.nextSeqNum %= SEQ_NUM_MODULO
 
             cv.release()
 
     def wait(self):
-        outbound = self.base + MAX_WINDOW_SIZE
-        if outbound >= SEQ_NUM_MODULO:
-            outbound = outbound % SEQ_NUM_MODULO
-            if outbound <= self.nextSeqNum < self.base:
+        windowEnd = self.base + MAX_WINDOW_SIZE
+
+        if windowEnd < SEQ_NUM_MODULO:
+            if self.nextSeqNum < self.base or self.nextSeqNum >= windowEnd:
                 return True
+        elif windowEnd % SEQ_NUM_MODULO <= self.nextSeqNum < self.base:
+            return True
         else:
-            if self.nextSeqNum < self.base or self.nextSeqNum >= outbound:
-                return True
-        return False
+            return False
+
 
     # function to receive ack packets
     def receive_ack(self):
