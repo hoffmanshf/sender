@@ -7,7 +7,7 @@ MAX_WINDOW_SIZE = 10
 MAX_DATA_LENGTH = 500
 SEQ_NUM_MODULO = 32
 
-global sendSocket, seqOut, ackOut
+global send_socket, seq_out, ack_out
 
 
 class sender:
@@ -43,15 +43,15 @@ class sender:
                 break
 
             p = packet.create_packet(self.next_seq_num, content)
-            self.send_packets[self.next_seq_num] = p
+            self.send_packets[p.seq_num] = p
 
             cv.acquire()
 
             while self.wait():
                 cv.wait()
 
-            sendSocket.sendto(p.get_udp_data(), (self.emulator_address, self.emulator_port))
-            seqOut.write("%d\n" % p.seq_num)
+            send_socket.sendto(p.get_udp_data(), (self.emulator_address, self.emulator_port))
+            seq_out.write("%d\n" % p.seq_num)
 
             if self.next_seq_num == self.send_base:
                 self.timer_start()
@@ -76,10 +76,10 @@ class sender:
 
     def receive_thread(self):
         while True:
-            data, _ = sendSocket.recvfrom(512)
+            data, _ = send_socket.recvfrom(512)
             receive_packet = packet.parse_udp_data(data)
             if receive_packet.type != 2:
-                ackOut.write("%d\n" % receive_packet.seq_num)
+                ack_out.write("%d\n" % receive_packet.seq_num)
             else:
                 self.receive_complete = True
                 break
@@ -92,16 +92,16 @@ class sender:
                 self.timer.cancel()
                 if self.send_complete:
                     eot = packet.create_eot(self.next_seq_num)
-                    sendSocket.sendto(eot.get_udp_data(), (self.emulator_address, self.emulator_port))
+                    send_socket.sendto(eot.get_udp_data(), (self.emulator_address, self.emulator_port))
             else:
                 self.timer_start()
 
             cv.notify()
             cv.release()
 
-        seqOut.close()
-        ackOut.close()
-        sendSocket.close()
+        seq_out.close()
+        ack_out.close()
+        send_socket.close()
 
     def resend(self):
         cv.acquire()
@@ -113,10 +113,9 @@ class sender:
             send_seq = self.seq_range(self.send_base, self.next_seq_num)
 
         for i in send_seq:
-
             p = self.send_packets[i]
-            sendSocket.sendto(p.get_udp_data(), (self.emulator_address, self.emulator_port))
-            seqOut.write("%d\n" % p.seq_num)
+            send_socket.sendto(p.get_udp_data(), (self.emulator_address, self.emulator_port))
+            seq_out.write("%d\n" % p.seq_num)
 
         cv.release()
 
@@ -142,11 +141,11 @@ if __name__ == "__main__":
     sender_port = int(sys.argv[3])
     input_file_name = sys.argv[4]
 
-    sendSocket = socket(AF_INET, SOCK_DGRAM)
-    sendSocket.bind(('', sender_port))
+    send_socket = socket(AF_INET, SOCK_DGRAM)
+    send_socket.bind(('', sender_port))
 
-    seqOut = open("seqnum.log", "w")
-    ackOut = open("ack.log", "w")
+    seq_out = open("seqnum.log", "w")
+    ack_out = open("ack.log", "w")
 
     sender = sender(emulator_address, emulator_port, sender_port, input_file_name)
 
