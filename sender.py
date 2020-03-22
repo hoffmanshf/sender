@@ -6,8 +6,9 @@ import sys
 MAX_WINDOW_SIZE = 10
 MAX_DATA_LENGTH = 500
 SEQ_NUM_MODULO = 32
+TIMEOUT_LENGTH = 0.1
 
-global send_socket, seq_out, ack_out
+global send_socket, seq_out, ack_out, lock, cv
 
 
 class sender:
@@ -53,11 +54,11 @@ class sender:
             send_socket.sendto(p.get_udp_data(), (self.emulator_address, self.emulator_port))
             seq_out.write("%d\n" % p.seq_num)
 
-            if self.next_seq_num == self.send_base:
+            if self.next_seq_num != self.send_base:
+                self.next_seq_num += 1
+                self.next_seq_num %= SEQ_NUM_MODULO
+            else:
                 self.timer_start()
-
-            self.next_seq_num += 1
-            self.next_seq_num %= SEQ_NUM_MODULO
 
             cv.release()
 
@@ -120,9 +121,8 @@ class sender:
         cv.release()
 
     def timer_start(self):
-        if self.timer is not None:
-            self.timer.cancel()
-        self.timer = Timer(0.1, self.resend)
+        self.timer.cancel()
+        self.timer = Timer(TIMEOUT_LENGTH, self.resend)
         self.timer.start()
 
 
