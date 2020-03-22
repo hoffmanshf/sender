@@ -7,19 +7,15 @@ MAX_WINDOW_SIZE = 10
 MAX_DATA_LENGTH = 500
 SEQ_NUM_MODULO = 32
 
+global sendSocket, seqOut, ackOut
+
 
 class sender:
-    seqOut = None
-
     sendPackets = {}
     base = 0
     seqNum = 0
     nextSeqNum = 0
-
-    sendSocket = None
     timer = None
-
-    end = False
 
     def __init__(self, emulatorAddress, emulatorPort, senderPort, inputFileName):
         self.emulatorAddress = emulatorAddress
@@ -27,42 +23,13 @@ class sender:
         self.senderPort = senderPort
         self.inputFileName = inputFileName
 
-        self.sendSocket = socket(AF_INET, SOCK_DGRAM)
-        self.sendSocket.bind(('', self.senderPort))
-        self.seqOut = open("seqnum.log", "w")
-
-    # resend sent but not acked packets
-    def resend(self):
-        cv.acquire()
-        self.setTimer()
-        if self.nextSeqNum > self.base:
-            for i in range(self.base, self.nextSeqNum):
-                self.send_packet(i)
-        else:
-            for i in range(self.base, SEQ_NUM_MODULO):
-                self.send_packet(i)
-            for i in range(0, self.nextSeqNum):
-                self.send_packet(i)
-
-        cv.release()
-
-    # helper to send data packet with seqnum i
-    def send_packet(self, i):
-        data = self.sendPackets[i].get_udp_data()
-        self.sendSocket.sendto(data, (self.emulatorAddress, self.emulatorPort))
-        self.seqOut.write(str(i) + "\n")
-
-    # function to send packets
     def send_packets(self):
         file = open(self.inputFileName)
 
         while True:
             content = file.read(MAX_DATA_LENGTH)
 
-            # if reach end of file, close input file and break
             if content == '':
-                file.close()
-                self.end = True
                 break
 
             p = packet.create_packet(self.nextSeqNum, content)
@@ -73,11 +40,9 @@ class sender:
             while self.wait():
                 cv.wait()
 
-            # send packets
-            self.sendSocket.sendto(p.get_udp_data(), (self.emulatorAddress, self.emulatorPort))
-            self.seqOut.write(str(p.seq_num) + "\n")
+            sendSocket.sendto(p.get_udp_data(), (self.emulatorAddress, self.emulatorPort))
+            seqOut.write("%d\n" % p.seq_num)
 
-            # start timer when there's no unacked packet
             if self.nextSeqNum == self.base:
                 self.setTimer()
 
@@ -85,6 +50,8 @@ class sender:
             self.nextSeqNum %= SEQ_NUM_MODULO
 
             cv.release()
+
+        file.close()
 
     def wait(self):
         windowEnd = self.base + MAX_WINDOW_SIZE
@@ -97,46 +64,59 @@ class sender:
         else:
             return False
 
-
-    # function to receive ack packets
     def receive_ack(self):
-        ackOut = open("ack.log", "w")
         while True:
-            # receive packet
-            data, addr = self.sendSocket.recvfrom(512)
+            data, addr = sendSocket.recvfrom(512)
             receivePacket = packet.parse_udp_data(data)
-            if receivePacket.type == 2:
+            if receivePacket.type != 2:
+                ackOut.write("%d\n" % receivePacket.seq_num)
+            else:
                 break
 
             cv.acquire()
 
-            # update base and log when receive ack
             self.base = (receivePacket.seq_num + 1) % SEQ_NUM_MODULO
-            ackOut.write(str(receivePacket.seq_num) + "\n")
 
             if self.nextSeqNum == self.base:
-                # stop timer and send EOT when all sent packets are acknowledged
                 self.timer.cancel()
-                # if self.end:
                 eot = packet.create_eot(self.base)
-                self.sendSocket.sendto(eot.get_udp_data(), (self.emulatorAddress, self.emulatorPort))
+                sendSocket.sendto(eot.get_udp_data(), (self.emulatorAddress, self.emulatorPort))
             else:
-                # if there are still packet sent but no acknowledged, reset timer
                 self.setTimer()
 
             cv.notify()
             cv.release()
 
-        self.seqOut.close()
+        seqOut.close()
         ackOut.close()
-        self.sendSocket.close()
+        sendSocket.close()
 
-    # function to set timer
+    def resend(self):
+        cv.acquire()
+        self.setTimer()
+        resendPackets = {}
+        idx = 0
+        if self.nextSeqNum > self.base:
+            for i in range(self.base, self.nextSeqNum):
+                resendPackets[idx] = self.sendPackets[i]
+                idx += 1
+        else:
+            for i in range(0, self.nextSeqNum):
+                resendPackets[idx] = self.sendPackets[i]
+                idx += 1
+            for i in range(self.base, SEQ_NUM_MODULO):
+                resendPackets[idx] = self.sendPackets[i]
+                idx += 1
+
+        for p in resendPackets.values():
+            sendSocket.sendto(p.get_udp_data(), (self.emulatorAddress, self.emulatorPort))
+            seqOut.write("%d\n" % p.seq_num)
+
+        cv.release()
+
     def setTimer(self):
         if self.timer is not None:
-            # stop timer when a packet is acked
             self.timer.cancel()
-        # start timer and schedule resent task after 100ms
         self.timer = Timer(0.1, self.resend)
         self.timer.start()
 
@@ -156,17 +136,20 @@ if __name__ == "__main__":
     senderPort = int(sys.argv[3])
     inputFileName = sys.argv[4]
 
+    sendSocket = socket(AF_INET, SOCK_DGRAM)
+    sendSocket.bind(('', senderPort))
+
+    seqOut = open("seqnum.log", "w")
+    ackOut = open("ack.log", "w")
+
     sender = sender(emulatorAddress, emulatorPort, senderPort, inputFileName)
 
-    # initialize lock and condition variable
     lock = Lock()
     cv = Condition(lock=lock)
 
-    # create two threads, one for sending data packet,  one for receiving ack packets
     thread1 = Thread(target=sender.send_packets)
     thread2 = Thread(target=sender.receive_ack)
 
-    # start two threads and join
     thread1.start()
     thread2.start()
     thread1.join()

@@ -15,8 +15,8 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/receiver.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="-837">
-              <caret line="20" column="51" lean-forward="true" selection-start-line="19" selection-start-column="8" selection-end-line="20" selection-end-column="51" />
+            <state relative-caret-position="168">
+              <caret line="7" selection-start-line="7" selection-end-line="7" />
               <folding>
                 <element signature="e#0#20#0" expanded="true" />
               </folding>
@@ -27,8 +27,8 @@
       <file pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/sender.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="338">
-              <caret line="96" lean-forward="true" selection-end-line="171" />
+            <state relative-caret-position="250">
+              <caret line="10" lean-forward="true" selection-end-line="156" />
               <folding>
                 <element signature="e#0#20#0" expanded="true" />
               </folding>
@@ -53,15 +53,22 @@
       <find>ackOut</find>
       <find>resend</find>
       <find>cancel</find>
-      <find>seqOut</find>
       <find>udp_socket</find>
-      <find>end</find>
       <find>content</find>
-      <find>sendPackets</find>
       <find>nextSeqNum</find>
       <find>base</find>
       <find>SEQ_NUM_MODULO</find>
       <find>parse_udp_data</find>
+      <find>seqOut</find>
+      <find>sendPackets</find>
+      <find>.seq</find>
+      <find>write</find>
+      <find>receiveSocket</find>
+      <find>sendSocket</find>
+      <find>seqou</find>
+      <find>ackout</find>
+      <find>end</find>
+      <find>timer</find>
     </findStrings>
   </component>
   <component name="Git.Settings">
@@ -70,6 +77,7 @@
   <component name="IdeDocumentHistory">
     <option name="CHANGED_PATHS">
       <list>
+        <option value="$PROJECT_DIR$/receiver.py" />
         <option value="$PROJECT_DIR$/sender.py" />
       </list>
     </option>
@@ -135,12 +143,12 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1584828760534</updated>
-      <workItem from="1584828761721" duration="7688000" />
+      <workItem from="1584828761721" duration="10848000" />
     </task>
     <servers />
   </component>
   <component name="TimeTrackingManager">
-    <option name="totallyTimeSpent" value="7688000" />
+    <option name="totallyTimeSpent" value="10848000" />
   </component>
   <component name="ToolWindowManager">
     <frame x="457" y="135" width="2191" height="1210" extended-state="0" />
@@ -182,8 +190,8 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/receiver.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-837">
-          <caret line="20" column="51" lean-forward="true" selection-start-line="19" selection-start-column="8" selection-end-line="20" selection-end-column="51" />
+        <state relative-caret-position="168">
+          <caret line="7" selection-start-line="7" selection-end-line="7" />
           <folding>
             <element signature="e#0#20#0" expanded="true" />
           </folding>
@@ -192,8 +200,8 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/sender.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="338">
-          <caret line="96" lean-forward="true" selection-end-line="171" />
+        <state relative-caret-position="250">
+          <caret line="10" lean-forward="true" selection-end-line="156" />
           <folding>
             <element signature="e#0#20#0" expanded="true" />
           </folding>
